@@ -121,13 +121,13 @@ ggplot(data = Leaves, aes(x = tmax_spring, y = day_of_year)) +
 model <- lm(day_of_year~tmax_spring, data = Leaves)
 summary(model)
 
-# look for normally distributed residual
+# look for normally distributed residuals
 hist(model$residuals, main = "Residuals Histogram")
 
 #look for pattern, for model assumptions to be met, it should look random
-plot(model$residuals, pch = 16, col = "pink")
+plot(model$residuals, pch = 16, col = "pink", main = "Residuals Plot")
 
 #check for normality in distribution of residuals with Shapiro Wilks
 shapiro.test(model$residuals) 
-#doesn't look normally distributed, need to ask about this
+#doesn't pass this test, need to ask about this
 
