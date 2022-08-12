@@ -118,7 +118,7 @@ ggplot(data = Leaves, aes(x = tmax_spring, y = day_of_year)) +
   stat_smooth(method = "lm", formula = y~x , size = 1)
 
 #create a model object for this linear model and then summarize it 
-model <- lm(day_of_year~tmax_spring, data = Leaves)
+model <- lm(day_of_year~tmax_spring, data = df)
 summary(model)
 
 # look for normally distributed residuals
