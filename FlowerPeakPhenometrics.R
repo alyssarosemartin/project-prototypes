@@ -4,8 +4,12 @@ library(httr)
 library(readr)
 library(lubridate)
 library(ggplot2)
+library(ggthemr) # still explorign these pretty plots
+librar
 rm(list= ls())
 rm(list=ls()[ls()!= "df"])
+
+devtools::install_github('Mikata-Project/ggthemr')
 
 #### This script formats data, applies rules, to generate peak phenometrics. It outputs a PDF for exploring
 #### discontinuous peaks and a csv file with peak onset/end duration and a flag for discontinuous peaks and multiple observers
@@ -118,16 +122,9 @@ df <- df %>%
   ungroup()
 
 #creates column to print the maximum number of flowers for each individual in each year
-#maybe need to take a closer look at how NAs are handled here, check the data, also when there are 2 values
-#tied for within year max, the max function takes neither, need to remedy. Examples of this issue:
-##30771 in 2013
-#48506 in 2013
-#13981 in 2013
-df_test <- subset(df, individual_id == 30771 & year == 2013) # run this line at the end, when you've done all the peak processing to look at issues
-
 df <- df %>%  
   group_by(year, individual_id) %>%
-  mutate(max_flowers = max(open_flower_estimate, na.rm = TRUE))%>% #what does max do in case of tie - doesn't take either
+  mutate(max_flowers = max(open_flower_estimate, na.rm = TRUE))%>% 
   ungroup()
 
 #flags "near peak" ie within 75% of the max in each ind and year
