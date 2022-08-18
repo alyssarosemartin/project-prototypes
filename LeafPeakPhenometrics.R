@@ -13,19 +13,19 @@ rm(list=ls()[ls()!= "df"])
 
 setwd("~/Documents/My Files/USA-NPN/Data/Analysis/R_default/TimetoRestore/Peak/Data")
 species_list <- npn_species()
-phenophases <- npn_phenophases_by_species(species_ids = 3)
+
 
 #Download data
 df <- npn_download_status_data(request_source="Alyssa",
-                                years=c(2012:2022),
+                                years=c(2013:2022),
                                 species_ids = 3, # species codes
                                 network_ids = c(72), 
                                 additional_fields = c("Site_Name", "Network_Name", "Phenophase_Category", "observedby_person_id"),
                                 phenophase_ids= c(483), # leaves
                                 climate_data = FALSE)
 
-write.csv(df, "redmapleGRSM.csv")
-read_csv()
+write.csv(df, file="redmaple_GRSM_2013-2022.csv")
+df <- (read.csv("redmaple_GRSM_2013-2022.csv"))
 
 #Format data
 #Code NAs correctly, extract year from the date
@@ -35,8 +35,6 @@ df <- df %>%
   mutate(intensity_value = na_if(intensity_value, "-9999")) %>%
   mutate(midpoint=recode(intensity_value, 'Less than 3'= 2, '3 to 10'= 7, '11 to 100'= 56, '101 to 1,000' = 551, '1,001 to 10,000' = 5510, 'More than 10,000'= 10000, '95% or more'= 0.95, '75-94%'= 0.85, '50-74%' = 0.62, '25-49%'= 0.37, '5-24%'= 0.15, 'Less than 5%'= 0.05))
 
-#I just removed this piece of the recode for midpoint, I don't think any spp have it - More than 10'= 10,
-
 #Get a count of observers who contributed to observing a given ind plant in a year
 df <- df %>%
   group_by(individual_id, year) %>%
@@ -44,7 +42,8 @@ df <- df %>%
 
 #Remove unneeded columns
 colnames(df) 
-df <- subset(df, select = -c(3,10,11,13,22))
+df <- subset(df, select = -c(1,4,11,12,13,15,23,25)) #use from read.csv (bc it adds an X index)
+#df <- subset blah blah # for use from web service
 
 #This removes rows that are 100% dupes, excepting observation_id, observer_id, and intensity type (for coyotebrush 2013-14 removed 31 rows)
 df <- df %>% 
@@ -121,9 +120,8 @@ df <- df %>%
 # From here forward df is the full dataframe, that will eventually get used to print graphs
 # int_pmetric is the summary table - which gives the start/end/duration and discont flag by ind-year
 int_pmetric <- df %>%
-  mutate(peak = if_else(is.na(peak), 0, peak)) %>%
   filter(peak == 1) %>%
-  group_by(state, site_id, species, individual_id, year, number_observers) %>%
+  group_by(state, site_id, common_name, individual_id, year, number_observers) %>%
   summarize(onset_doy = min(day_of_year, na.rm = TRUE),
             end_doy = max(day_of_year, na.rm = TRUE)) %>%
   mutate(duration = end_doy-onset_doy + 1) %>% # the +1 is so that there is no duration of zero, 1 day peaks
@@ -186,17 +184,6 @@ df$peak[is.na(df$peak)] <- 0 #turning NAs into 0s
 df$discontinuous_flag[is.na(df$discontinuous_flag)] <- 0
 df$discontinuous_flag <-as.character(df$discontinuous_flag)
 df$discontinuous <- recode(df$discontinuous_flag, "1" = 'yes', "0" = "no")
-
-#Prototype - get a good plot with one ind/year
-df_sub <- subset(df, individual_id == 17967 & year == 2013)
-
-p <-ggplot() +
-  geom_point(data = df_sub, aes(x = day_of_year, y = open_flower_estimate, color = peak))
-print(plot(p + labs(title = paste0(df_sub$common_name," individual #", df_sub$individual_id, " in ", df_sub$year),  
-                    subtitle = paste0("Discontinuous peak: ", df_sub$discontinuous, ". ", df_sub$number_observers, " observers contributed ", df_sub$num_records_for_ind_year, " records."), 
-                    colour = "Peak", y = "Estimate of Open Flowers", x = "Day of Year")))
-
-
 
 
 #PDF of all Plots

@@ -5,11 +5,8 @@ library(readr)
 library(lubridate)
 library(ggplot2)
 library(ggthemr) # still explorign these pretty plots
-librar
 rm(list= ls())
 rm(list=ls()[ls()!= "df"])
-
-devtools::install_github('Mikata-Project/ggthemr')
 
 #### This script formats data, applies rules, to generate peak phenometrics. It outputs a PDF for exploring
 #### discontinuous peaks and a csv file with peak onset/end duration and a flag for discontinuous peaks and multiple observers
@@ -17,16 +14,20 @@ devtools::install_github('Mikata-Project/ggthemr')
 
 setwd("~/Documents/My Files/USA-NPN/Data/Analysis/R_default/TimetoRestore/Peak/Data")
 
+species_list <- npn_species()
 
 #Download data
 df <- npn_download_status_data(request_source="Alyssa",
-                                years=c(2012:2022),
+                                years=c(2019:2022),
                                 species_ids = 1827, # species codes
                                 additional_fields = c("observedby_person_id"),
                                 phenophase_ids= c(501,500), # open flowers and flowers or flower buds
                                 climate_data = FALSE)
 
 
+write.csv(df, file="wildparsnip2019-2022.csv")
+
+df <- (read.csv("wildparsnip2019-2022.csv"))
 
 #Format data
 #Code NAs correctly, extract year from the date
@@ -34,18 +35,18 @@ df <- npn_download_status_data(request_source="Alyssa",
 df <- df %>%
   mutate(year = lubridate::year(observation_date)) %>%
   mutate(intensity_value = na_if(intensity_value, "-9999")) %>%
-  mutate(midpoint=recode(intensity_value, 'Less than 3'= 2, '3 to 10'= 7, '11 to 100'= 56, '101 to 1,000' = 551, '1,001 to 10,000' = 5510, 'More than 10,000'= 10000, '95% or more'= 0.95, '75-94%'= 0.85, '50-74%' = 0.62, '25-49%'= 0.37, '5-24%'= 0.15, 'Less than 5%'= 0.05))
+  mutate(midpoint=recode(intensity_value, 'Less than 3'= 2, '3 to 10'= 7, '11 to 100'= 56, '101 to 1,000' = 551, '1,001 to 10,000' = 5510, 'More than 1,000'= 1001,'More than 10,000'= 10001, '95% or more'= 0.95, '75-94%'= 0.85, '50-74%' = 0.62, '25-49%'= 0.37, '5-24%'= 0.15, 'Less than 5%'= 0.05))
 
-#I just removed this piece of the recode for midpoint, I don't think any spp have it - More than 10'= 10,
 
 #Get a count of observers who contributed to observing a given ind plant in a year
 df <- df %>%
   group_by(individual_id, year) %>%
   mutate(number_observers = n_distinct(observedby_person_id))
 
-#Remove unneeded columns
+#Remove unneeded columns - this changes if you've picked back up the CSV or downloaded direct
 colnames(df) 
-df <- subset(df, select = -c(3,10,11,13,22))
+df <- subset(df, select = -c(1,4,11,12,14,23)) #use from read.csv (bc it adds an X index)
+#df <- subset(df, select = -c(3,10,11,13,22)) # for use from web service
 
 #This removes rows that are 100% dupes, excepting observation_id, observer_id, and intensity type (for coyotebrush 2013-14 removed 31 rows)
 df <- df %>% 
@@ -115,6 +116,7 @@ df <- df %>%
 colnames(df) 
 df <- subset(df, select = c(3,4,5,6,7,8,9,10,11,12,13,14,18,20,24))
 
+#FLORAL RESOURCES - optional
 #creates column to flag all observations with over 500 flowers - substantial floral resources available
 df <- df %>%  
   group_by(year, individual_id) %>%
@@ -134,7 +136,8 @@ df <- df %>%
   group_by(year, individual_id) %>%
   mutate(near_max_threshold = max_flowers*0.75)%>%
   mutate(is_near_max = if_else(open_flower_estimate > near_max_threshold, 1, 0))%>%
-  mutate(peak = if_else(is_near_max == "1"| over_500 == "1", 1, 0))%>% 
+  mutate(peak = if_else(is_near_max == "1", 1, 0))%>% #line to use without floral threshold
+  #mutate(peak = if_else(is_near_max == "1"| over_500 == "1", 1, 0))%>% #line to use with floral threshold
   ungroup()
 
 #Add count of records in and out of peak
@@ -147,11 +150,10 @@ df <- df %>%
 
 # For each individual and year, want to know peak duration (in number of days) 
 # and a flag if the peaks were discontinuous; for these calculations, treat 
-# peak values of NA as zeros (not peak)
+# peak values of NA as NA, ignored.
 # From here forward df is the full dataframe, that will eventually get used to print graphs
 # int_pmetric is the summary table - which gives the start/end/duration and discont flag by ind-year
 int_pmetric <- df %>%
-  mutate(peak = if_else(is.na(peak), 0, peak)) %>%
   filter(peak == 1) %>%
   group_by(state, site_id, common_name, individual_id, year, number_observers) %>%
   summarize(onset_doy = min(day_of_year, na.rm = TRUE),
@@ -193,7 +195,7 @@ for (i in 1:nrow(int_pmetric)) {
 
 #With the code above we have successfully flagged our Intensity phenometric data with discontinuous flags
 #the resulting int_pmetric file is essentially the prototype for individual intensity phenometrics 
-write_csv(int_pmetric, 'intensity_phenometrics_wildparsnip_2013-2022.csv')
+write_csv(int_pmetric, 'intensity_phenometrics_wildparsnip_2019-2022.csv')
 
 #Now back over to the base dataset, df, where we want to get the discontinuous flag and plot data, to reality check
 #Our intensity phenometrics, decide if we want to include all ind-year combos
@@ -217,16 +219,13 @@ df$discontinuous_flag[is.na(df$discontinuous_flag)] <- 0
 df$discontinuous_flag <-as.character(df$discontinuous_flag)
 df$discontinuous <- recode(df$discontinuous_flag, "1" = 'yes', "0" = "no")
 
-#Prototype - get a good plot with one ind/year
-df_sub <- subset(df, individual_id == 17967 & year == 2013)
-
-p <-ggplot() +
-  geom_point(data = df_sub, aes(x = day_of_year, y = open_flower_estimate, color = peak))
-print(plot(p + labs(title = paste0(df_sub$common_name," individual #", df_sub$individual_id, " in ", df_sub$year),  
-                    subtitle = paste0("Discontinuous peak: ", df_sub$discontinuous, ". ", df_sub$number_observers, " observers contributed ", df_sub$num_records_for_ind_year, " records."), 
-                    colour = "Peak", y = "Estimate of Open Flowers", x = "Day of Year")))
-
-
+#Prototype - get a good plot with one ind/year (for coyotebrush dataset)
+#df_sub <- subset(df, individual_id == 17967 & year == 2013)
+#p <-ggplot() +
+  #geom_point(data = df_sub, aes(x = day_of_year, y = open_flower_estimate, color = peak))
+#print(plot(p + labs(title = paste0(df_sub$common_name," individual #", df_sub$individual_id, " in ", df_sub$year),  
+                    #subtitle = paste0("Discontinuous peak: ", df_sub$discontinuous, ". ", df_sub$number_observers, " observers contributed ", df_sub$num_records_for_ind_year, " records."), 
+                   #colour = "Peak", y = "Estimate of Open Flowers", x = "Day of Year")))
 
 
 #PDF of all Plots
@@ -245,7 +244,7 @@ for (i in unique(df$common_factor)){
 }
 
 #Create PDF
-pdf("peak_plots_wildparsnip_2012-2022.pdf")
+pdf("peak_plots_wildparsnip_2013-2022.pdf")
 for (i in unique(df$common_factor)){
   print(plot_list[[i]])
 }
