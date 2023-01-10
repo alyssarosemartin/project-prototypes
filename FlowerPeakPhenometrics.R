@@ -4,7 +4,7 @@ library(httr)
 library(readr)
 library(lubridate)
 library(ggplot2)
-library(ggthemr) # still explorign these pretty plots
+library(ggthemr) # still exploring these pretty plots
 rm(list= ls())
 rm(list=ls()[ls()!= "df"])
 
@@ -18,16 +18,22 @@ species_list <- npn_species()
 
 #Download data
 df <- npn_download_status_data(request_source="Alyssa",
-                                years=c(2019:2022),
-                                species_ids = 1827, # species codes
+                                years=c(2013:2022),
+                                species_ids = c(201), # species codes
                                 additional_fields = c("observedby_person_id"),
                                 phenophase_ids= c(501,500), # open flowers and flowers or flower buds
                                 climate_data = FALSE)
 
+#Little side venture looking at dupes that come in fresh from the web service
+df1 <- subset(df, select = c(2:22)) #drop Observation_ID field
+df2 <- df1[duplicated(df1)]  #dataframe w just the duplicated records
+df3 <- df1[!duplicated(df1)] #original dataframe w dupes removed
 
-write.csv(df, file="wildparsnip2019-2022.csv")
 
-df <- (read.csv("wildparsnip2019-2022.csv"))
+#write out CSV so you don't have to call it back
+write.csv(df, file="buttonbush2013-2022.csv")
+
+df <- (read.csv("buttonbush2013-2022.csv"))
 
 #Format data
 #Code NAs correctly, extract year from the date
@@ -136,9 +142,11 @@ df <- df %>%
   group_by(year, individual_id) %>%
   mutate(near_max_threshold = max_flowers*0.75)%>%
   mutate(is_near_max = if_else(open_flower_estimate > near_max_threshold, 1, 0))%>%
-  mutate(peak = if_else(is_near_max == "1", 1, 0))%>% #line to use without floral threshold
-  #mutate(peak = if_else(is_near_max == "1"| over_500 == "1", 1, 0))%>% #line to use with floral threshold
+  #mutate(peak = if_else(is_near_max == "1", 1, 0))%>% #line to use without floral threshold
+  mutate(peak = if_else(is_near_max == "1"| over_500 == "1", 1, 0))%>% #line to use with floral threshold
   ungroup()
+
+write.csv(df, file="buttonbush2013-2022_w_peak.csv")
 
 #Add count of records in and out of peak
 df$peak <- as.numeric(df$peak) # watch out - seems like this guy sometimes changes peaks from 0/1 to 1/2
@@ -155,7 +163,7 @@ df <- df %>%
 # int_pmetric is the summary table - which gives the start/end/duration and discont flag by ind-year
 int_pmetric <- df %>%
   filter(peak == 1) %>%
-  group_by(state, site_id, common_name, individual_id, year, number_observers) %>%
+  group_by(state, latitude, site_id, common_name, individual_id, year, number_observers) %>%
   summarize(onset_doy = min(day_of_year, na.rm = TRUE),
             end_doy = max(day_of_year, na.rm = TRUE)) %>%
   mutate(duration = end_doy-onset_doy + 1) %>% # the +1 is so that there is no duration of zero, 1 day peaks
@@ -195,7 +203,7 @@ for (i in 1:nrow(int_pmetric)) {
 
 #With the code above we have successfully flagged our Intensity phenometric data with discontinuous flags
 #the resulting int_pmetric file is essentially the prototype for individual intensity phenometrics 
-write_csv(int_pmetric, 'intensity_phenometrics_wildparsnip_2019-2022.csv')
+write_csv(int_pmetric, 'intensity_phenometrics_buttonbush_2013-2022.csv')
 
 #Now back over to the base dataset, df, where we want to get the discontinuous flag and plot data, to reality check
 #Our intensity phenometrics, decide if we want to include all ind-year combos
@@ -244,9 +252,24 @@ for (i in unique(df$common_factor)){
 }
 
 #Create PDF
-pdf("peak_plots_wildparsnip_2013-2022.pdf")
+pdf("peak_plots_buttonbush_2013-2022.pdf")
 for (i in unique(df$common_factor)){
   print(plot_list[[i]])
 }
 dev.off()
 
+#Plot onset by latitude
+#note not all data is 2022, supplying origin as this year because you have t
+int_pmetric$onset_date <- as.Date(int_pmetric$onset_doy, origin = "2022-01-01")
+
+
+p = ggplot() +
+  geom_point(data = int_pmetric, aes(x = year, y = onset_date), color = int_pmetric$site_id) +
+  #scale_y_continuous(breaks = c(25,30,35,40,45)) +
+  scale_x_continuous(breaks = c(2013,2015,2017,2019,2021)) +
+  labs(title = paste0("Ohio onset x year ", df_subset$common_name),  
+      y = "Onset Date", x = "Year")
+plot(p)
+
+OH_int_pmetric <- int_pmetric %>%
+  filter(state == "OH") 
